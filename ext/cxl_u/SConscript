@@ -1,0 +1,79 @@
+# -*- mode:python -*-
+
+import os
+import glob
+
+Import('env')
+
+if not os.path.exists(Dir('.').srcnode().abspath + '/cxl_u'):
+    env['HAVE_CXLUNIVERSAL'] = False
+    Return()
+
+env['HAVE_CXLUNIVERSAL'] = True
+
+# Add CXL-Universal wrapper files
+cxl_u_code_files = []
+
+def add_cxl_u_code_file(filename):
+    cxl_u_code_files.append(File(filename))
+
+# Add only CXL-Universal core files (excluding wrapper files in cxl_u/src/)
+## recursively add all files in cxl_u/src/core/cpp only
+base_path = Dir('.').srcnode().abspath
+cpp_path = os.path.join(base_path, 'cxl_u/src/core/cpp')
+
+for root, dirs, files in os.walk(cpp_path):
+    for file in files:
+        if file.endswith('.cpp'):
+            full_path = os.path.join(root, file)
+            # Convert absolute path back to relative path from base_path
+            rel_path = os.path.relpath(full_path, base_path)
+            add_cxl_u_code_file(rel_path)
+
+
+cxl_u_env = env.Clone()
+cxl_u_env.Append(CPPPATH = Dir('../../src/'))
+# CXL-Universal include roots - use source directory paths
+source_base = Dir('.').srcnode().abspath
+include_dirs = [
+    Dir(source_base + '/cxl_u/src/core'),           # for <core/...> includes
+    Dir(source_base + '/cxl_u/src/core/header')     # for <header/...> includes
+]
+cxl_u_env.Append(CPPPATH = include_dirs)
+
+# Add built-in yaml-cpp dependency
+yaml_cpp_builtin_path = Dir('.').srcnode().abspath + '/cxl_u/extern/yaml-cpp'
+cxl_u_env.Append(CPPPATH = [yaml_cpp_builtin_path + '/include'])
+
+# Add yaml-cpp source files to build
+yaml_cpp_src_path = yaml_cpp_builtin_path + '/src'
+for root, dirs, files in os.walk(yaml_cpp_src_path):
+    for file in files:
+        if file.endswith('.cpp'):
+            full_path = os.path.join(root, file)
+            # Convert absolute path back to relative path from ext/cxl_u/
+            rel_path = os.path.relpath(full_path, Dir('.').srcnode().abspath)
+            add_cxl_u_code_file(rel_path)
+
+cxl_u_env.Append(CXXFLAGS=['-std=c++17'])
+cxl_u_env.Append(CCFLAGS=['-Wno-error=deprecated-copy',
+                         '-Wno-error=address-of-packed-member',
+                         '-Wno-error=redundant-move',
+                         '-Wno-error=array-bounds',
+                         '-Wno-error=reorder',
+                         '-Wno-error=unused-variable'])
+
+# Build wrapper only (no external library)
+if cxl_u_code_files:
+    # Build the wrapper object(s) as static objects
+    wrapper_objs = [cxl_u_env.StaticObject(f) for f in cxl_u_code_files]
+
+    # Create static library from wrapper/bridge
+    cxl_u_env.StaticLibrary('cxl_u', wrapper_objs)
+
+    # Add library paths and libraries
+    env.Prepend(CPPPATH = [Dir('.'), Dir('cxl_u/src/core')])
+    env.Append(LIBS = ['cxl_u'])
+    env.Prepend(LIBPATH = [Dir('.')])
+
+    # Note: yaml-cpp is now built into libcxl_u.a, no separate linking needed

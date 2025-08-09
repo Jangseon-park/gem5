@@ -239,6 +239,12 @@ def addNoISAOptions(parser):
         "Direct parameters of the root object are not accessible, "
         "only parameters of its children.",
     )
+    parser.add_argument(
+        "--cxl-u-config-path",
+        type=str,
+        dest="cxl_u_config_path",
+        help="CXL_Universal config dir path",
+    )
 
 
 # Add common options that assume a non-NULL ISA.

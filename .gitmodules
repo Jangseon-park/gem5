@@ -1,0 +1,3 @@
+[submodule "ext/cxl_u/cxl_u"]
+	path = ext/cxl_u/cxl_u
+	url = https://github.com/Jangseon-park/CXL-Universal.git

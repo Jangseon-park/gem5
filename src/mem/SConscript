@@ -128,6 +128,14 @@ if env['HAVE_DRAMSYS']:
     SimObject('DRAMSys.py', sim_objects=['DRAMSys'])
     Source('dramsys_wrapper.cc')
     Source('dramsys.cc')
+if env['HAVE_CXLUNIVERSAL']:
+    SimObject('CXLUniversal.py', sim_objects=['CXLUniversal'])
+    Source('cxluniversal.cc')
+    DebugFlag('CXLUniversal')
+    # Add include paths for CXL Universal headers
+    env.Append(CPPPATH=[Dir('#ext/cxl_u/cxl_u/src'),
+                       Dir('#ext/cxl_u/cxl_u/src/core'),
+                       Dir('#ext/cxl_u/cxl_u/src/core/header')])
 
 SimObject('MemChecker.py', sim_objects=['MemChecker', 'MemCheckerMonitor'])
 Source('mem_checker.cc')
