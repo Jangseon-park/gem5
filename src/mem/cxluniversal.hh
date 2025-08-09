@@ -78,6 +78,7 @@ class CXLUniversal : public AbstractMemory
     Port &getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;
     virtual ~CXLUniversal();
+    uint64_t get_size() const;
 
   protected:
     Tick recv_atomic(PacketPtr pkt);
