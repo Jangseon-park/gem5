@@ -171,7 +171,6 @@ DebugFlag("DRAMsim3")
 DebugFlag('HMCController')
 DebugFlag('SerialLink')
 DebugFlag('TokenPort')
-
 DebugFlag("MemChecker")
 DebugFlag("MemCheckerMonitor")
 DebugFlag("QOS")

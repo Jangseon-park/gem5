@@ -1,16 +1,18 @@
 #include "mem/cxluniversal.hh"
 
+#include <gem5/cxl_u_wrapper.h>
+
 #include "base/addr_range.hh"
 #include "base/callback.hh"
+#include "base/trace.hh"
 #include "base/types.hh"
-#include "gem5/cxl_u_wrapper.h"
+#include "debug/CXLUniversal.hh"
 #include "mem/packet.hh"
 #include "sim/cur_tick.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 
 using std::bind;
-
 namespace gem5
 {
 namespace memory
@@ -70,6 +72,9 @@ CXLUniversal::CXLUniversal(const Params &p) :
     send_resp_event([this] { process_send_resp(); }, name()),
     tick_event([this] { process_tick(); }, name())
 {
+    DPRINTF(CXLUniversal, "CXLUniversal constructor\n");
+    DPRINTF(CXLUniversal, "config_file_path: %s\n", config_file_path.c_str());
+    DPRINTF(CXLUniversal, "result_file_path: %s\n", result_file_path.c_str());
     registerExitCallback([this]() { wrapper->finish(); });
 }
 
@@ -90,12 +95,14 @@ void CXLUniversal::init()
 
 void CXLUniversal::startup()
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::startup\n");
     start_tick = curTick();
-    schedule(tick_event, clockEdge());
+    //schedule(tick_event, clockEdge());
 }
 
 DrainState CXLUniversal::drain()
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::drain\n");
     // Check if any path has pending operations
     if (wrapper->is_pending(::CXLUniv::PathType::INPUT) ||
         wrapper->is_pending(::CXLUniv::PathType::OUTPUT)) {
@@ -106,6 +113,7 @@ DrainState CXLUniversal::drain()
 
 Port &CXLUniversal::getPort(const std::string &if_name, PortID idx)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::getPort\n");
     if (if_name != "port") {
         return ClockedObject::getPort(if_name, idx);
     } else {
@@ -115,12 +123,14 @@ Port &CXLUniversal::getPort(const std::string &if_name, PortID idx)
 
 Tick CXLUniversal::recv_atomic(PacketPtr pkt)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::recv_atomic\n");
     access(pkt);
     return pkt->cacheResponding() ? 0 : 100000; // 100 ns
 }
 
 void CXLUniversal::recv_functional(PacketPtr pkt)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::recv_functional\n");
     pkt->pushLabel(name());
     functionalAccess(pkt);
     for (auto i = response_queue.begin(); i != response_queue.end(); ++i)
@@ -130,6 +140,7 @@ void CXLUniversal::recv_functional(PacketPtr pkt)
 
 bool CXLUniversal::recv_timing_req(PacketPtr pkt)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req\n");
     if (pkt->cacheResponding()) {
         pendingDelete.reset(pkt);
         return true;
@@ -140,15 +151,19 @@ bool CXLUniversal::recv_timing_req(PacketPtr pkt)
         return false;
     }
     if (pkt->isRead()) {
+        DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req: Read\n");
         inflight_read_req++;
         inflight_read_req_queue[pkt->getAddr()].push(pkt);
         wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 0); // Read
+        schedule(tick_event, clockEdge());
         return true;
     } else if (pkt->isWrite()) {
+        DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req: Write\n");
         inflight_write_req++;
         inflight_write_req_queue[pkt->getAddr()].push(pkt);
         wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 1); // Write
         access_and_respond(pkt);
+        schedule(tick_event, clockEdge());
         return true;
     } else {
         access_and_respond(pkt);
@@ -181,8 +196,14 @@ void CXLUniversal::access_and_respond(PacketPtr pkt)
     }
 }
 
+uint64_t CXLUniversal::get_size() const
+{
+    return wrapper->get_size();
+}
+
 void CXLUniversal::read_complete(uint64_t address, uint64_t when)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::read_complete\n");
     auto p = inflight_read_req_queue.find(address);
     assert(p != inflight_read_req_queue.end());
     PacketPtr pkt = p->second.front();
@@ -195,6 +216,7 @@ void CXLUniversal::read_complete(uint64_t address, uint64_t when)
 
 void CXLUniversal::write_complete(uint64_t address, uint64_t when)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::write_complete\n");
     auto p = inflight_write_req_queue.find(address);
     assert(p != inflight_write_req_queue.end());
     p->second.pop();
@@ -210,6 +232,7 @@ void CXLUniversal::write_complete(uint64_t address, uint64_t when)
 
 void CXLUniversal::recv_retry_for_host_bridge(uint64_t address, uint64_t when)
 {
+    DPRINTF(CXLUniversal, "CXLUniversal::recv_retry_for_host_bridge\n");
     if (req_stall && !wrapper->is_full(::CXLUniv::PathType::INPUT)) {
         req_stall = false;
         port.sendRetryReq();
@@ -241,8 +264,10 @@ void CXLUniversal::process_tick()
 {
     // Always tick the wrapper (no isTimingMode check needed)
     wrapper->tick(curTick());
-    schedule(tick_event, curTick() +
-             wrapper->get_nanosec_per_tick() * sim_clock::as_int::ns);
+    if (inflight_read_req != 0 || inflight_write_req != 0) {
+        schedule(tick_event, curTick() +
+                 wrapper->get_nanosec_per_tick() * sim_clock::as_int::ns);
+    }
 }
 
 } // namespace memory
