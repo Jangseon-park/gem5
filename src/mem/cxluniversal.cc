@@ -156,7 +156,9 @@ bool CXLUniversal::recv_timing_req(PacketPtr pkt)
         inflight_read_req++;
         inflight_read_req_queue[pkt->getAddr()].push(pkt);
         wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 0); // Read
-        schedule(tick_event, clockEdge());
+        if (!tick_event.scheduled()) {
+            schedule(tick_event, clockEdge());
+        }
         return true;
     } else if (pkt->isWrite()) {
         DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req: Write\n");
@@ -164,7 +166,9 @@ bool CXLUniversal::recv_timing_req(PacketPtr pkt)
         inflight_write_req_queue[pkt->getAddr()].push(pkt);
         wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 1); // Write
         access_and_respond(pkt);
-        schedule(tick_event, clockEdge());
+        if (!tick_event.scheduled()) {
+            schedule(tick_event, clockEdge());
+        }
         return true;
     } else {
         access_and_respond(pkt);
@@ -269,17 +273,13 @@ void CXLUniversal::process_tick()
         DPRINTF(CXLUniversal, "CXLUniversal::process_tick: timing mode\n");
         wrapper->tick(curTick());
         if (inflight_read_req != 0 || inflight_write_req != 0) {
+            Tick next_tick = wrapper->get_next_tick();
+            if (next_tick == 0) {
+                next_tick = curTick() +
+                    wrapper->get_picosec_per_tick() * sim_clock::as_int::ps;
+            }
             DPRINTF(CXLUniversal,
-                    "CXLUniversal::process_tick: schedule tick_event\n");
-            double picosec_per_tick = wrapper->get_picosec_per_tick();
-            double tick_increment = picosec_per_tick * sim_clock::as_int::ps;
-            Tick next_tick = curTick() + tick_increment;
-            DPRINTF(CXLUniversal,
-                    "CXLUniversal::process_tick: picosec_per_tick=%f, "
-                    "sim_clock::as_int::ps=%lu, tick_increment=%f, "
-                    "next_tick=%lu\n",
-                    picosec_per_tick, sim_clock::as_int::ps, tick_increment,
-                    next_tick);
+                    "CXLUniversal::process_tick: next_tick=%lu\n", next_tick);
             if (tick_event.scheduled()) {
                 reschedule(tick_event, next_tick);
             } else {
