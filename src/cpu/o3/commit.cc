@@ -451,22 +451,50 @@ Commit::generateTrapEvent(ThreadID tid, Fault inst_fault)
         [this, tid]{ processTrapEvent(tid); },
         "Trap", true, Event::CPU_Tick_Pri);
 
+    // 기본 트랩 레이턴시 결정: 재시도 시스템콜이면 syscallRetryLatency, 아니면 trapLatency
     Cycles latency = std::dynamic_pointer_cast<SyscallRetryFault>(inst_fault) ?
                      cpu->syscallRetryLatency : trapLatency;
 
-    // hardware transactional memory
+    // HTM 전용 처리(기존 유지)
     if (inst_fault != nullptr &&
         std::dynamic_pointer_cast<GenericHtmFailureFault>(inst_fault)) {
-        // TODO
-        // latency = default abort/restore latency
-        // could also do some kind of exponential back off if desired
+        // TODO: 필요 시 HTM abort/restore 지연 설정
+    }
+
+    // 페이지 폴트면 page_fault_latency 적용 (설정되어 있고, 기본 trapLatency를 쓰는 경우에만)
+    if (latency == trapLatency) {
+        const auto &o3p = static_cast<const BaseO3CPUParams &>(cpu->params());
+        const Cycles pf_lat = o3p.page_fault_latency;
+        if (pf_lat > Cycles(0) && inst_fault) {
+            bool is_page_fault = false;
+
+            // SE 모드 공통 페이지 폴트
+            if (std::dynamic_pointer_cast<GenericPageTableFault>(inst_fault)) {
+                is_page_fault = true;
+            } else {
+                // 아키텍처별(예: x86) 페이지 폴트는 이름으로 식별
+                const char* fname = inst_fault->name();
+                if (fname) {
+                    std::string s(fname);
+                    if (s.find("Page-Fault") != std::string::npos ||
+                        s.find("page table fault") != std::string::npos) {
+                        is_page_fault = true;
+                    }
+                }
+            }
+
+            if (is_page_fault) {
+                latency = pf_lat;
+                cpu->numPageFaultStalls++;
+                cpu->totalPageFaultStallCycles += pf_lat;
+            }
+        }
     }
 
     cpu->schedule(trap, cpu->clockEdge(latency));
     trapInFlight[tid] = true;
     thread[tid]->trapPending = true;
 }
-
 void
 Commit::generateTCEvent(ThreadID tid)
 {
