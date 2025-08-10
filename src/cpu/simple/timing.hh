@@ -284,6 +284,8 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     void verifyMemoryMode() const override;
 
+    void regStats() override;
+
     void activateContext(ThreadID thread_num) override;
     void suspendContext(ThreadID thread_num) override;
 
@@ -376,6 +378,11 @@ class TimingSimpleCPU : public BaseSimpleCPU
      * @returns true if the CPU is drained, false otherwise.
      */
     bool tryCompleteDrain();
+
+  protected:
+    // Stats: number of injected page-fault stalls and their total cycles
+    statistics::Scalar numPageFaultStalls;
+    statistics::Scalar totalPageFaultStallCycles;
 };
 
 } // namespace gem5

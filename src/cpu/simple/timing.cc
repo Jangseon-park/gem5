@@ -82,6 +82,24 @@ TimingSimpleCPU::TimingSimpleCPU(const BaseTimingSimpleCPUParams &p)
 {
     _status = Idle;
 }
+void
+TimingSimpleCPU::regStats()
+{
+    BaseSimpleCPU::regStats();
+
+    using namespace statistics;
+
+    numPageFaultStalls
+        .name(csprintf("%s.numPageFaultStalls", name()))
+        .desc("Number of page-fault stalls injected")
+        .flags(nozero);
+
+    totalPageFaultStallCycles
+        .name(csprintf("%s.totalPageFaultStallCycles", name()))
+        .desc("Total cycles stalled due to injected page-fault latency")
+        .flags(nozero)
+        .prereq(numPageFaultStalls);
+}
 
 
 
@@ -801,6 +819,8 @@ TimingSimpleCPU::advanceInst(const Fault &fault)
                 // Try generic SE-mode page fault first
                 if (std::dynamic_pointer_cast<GenericPageTableFault>(fault)) {
                     stall = clockEdge(pageFaultLatency);
+                    numPageFaultStalls++;
+                    totalPageFaultStallCycles += pageFaultLatency;
                 } else {
                     // x86 specific PageFault
                     // We cannot include arch headers here, but dynamic_pointer_cast
@@ -811,6 +831,8 @@ TimingSimpleCPU::advanceInst(const Fault &fault)
                     if (fname && (std::string(fname).find("Page-Fault") != std::string::npos ||
                                   std::string(fname).find("page table fault") != std::string::npos)) {
                         stall = clockEdge(pageFaultLatency);
+                        numPageFaultStalls++;
+                        totalPageFaultStallCycles += pageFaultLatency;
                     }
                 }
             }
