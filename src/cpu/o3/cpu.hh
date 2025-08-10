@@ -173,6 +173,10 @@ class CPU : public BaseCPU
     /** Constructs a CPU with the given parameters. */
     CPU(const BaseO3CPUParams &params);
 
+    // Stats: number of injected page-fault stalls and their total cycles
+    statistics::Scalar numPageFaultStalls;
+    statistics::Scalar totalPageFaultStallCycles;
+
     ProbePointArg<PacketPtr> *ppInstAccessComplete;
     ProbePointArg<std::pair<DynInstPtr, PacketPtr> > *ppDataAccessComplete;
 

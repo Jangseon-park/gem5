@@ -217,3 +217,7 @@ class BaseO3CPU(BaseCPU):
     recvRespBufferSize = Param.Unsigned(
         64, "Maximum number of receive response bytes per cycle"
     )
+
+    # Additional stall cycles injected when a page fault occurs
+    page_fault_latency = Param.Cycles(
+        0, "Additional stall cycles to wait after a page fault")

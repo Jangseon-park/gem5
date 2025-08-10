@@ -267,6 +267,18 @@ CPU::CPU(const BaseO3CPUParams &params)
 
     DPRINTF(O3CPU, "Creating O3CPU object.\n");
 
+    // Register page-fault stall stats
+    numPageFaultStalls
+        .name(csprintf("%s.numPageFaultStalls", name()))
+        .desc("Number of page-fault stalls injected")
+        .flags(statistics::nozero);
+
+    totalPageFaultStallCycles
+        .name(csprintf("%s.totalPageFaultStallCycles", name()))
+        .desc("Total cycles stalled due to injected page-fault latency")
+        .flags(statistics::nozero)
+        .prereq(numPageFaultStalls);
+
     // Setup any thread state.
     thread.resize(numThreads);
 
