@@ -263,6 +263,9 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     Cycles previousCycle;
 
+    // Additional stall cycles injected after a page fault
+    const Cycles pageFaultLatency;
+
   protected:
 
      /** Return a reference to the data port. */

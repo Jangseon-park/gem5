@@ -40,3 +40,7 @@ class BaseTimingSimpleCPU(BaseSimpleCPU):
     @classmethod
     def support_take_over(cls):
         return True
+
+    # Additional stall cycles injected when a page fault occurs
+    page_fault_latency = Param.Cycles(
+        0, "Additional stall cycles to wait after a page fault")

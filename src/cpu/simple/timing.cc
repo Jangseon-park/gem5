@@ -40,6 +40,7 @@
  */
 
 #include "cpu/simple/timing.hh"
+#include <string>
 
 #include "arch/generic/decoder.hh"
 #include "base/compiler.hh"
@@ -76,6 +77,7 @@ TimingSimpleCPU::TimingCPUPort::TickEvent::schedule(PacketPtr _pkt, Tick t)
 TimingSimpleCPU::TimingSimpleCPU(const BaseTimingSimpleCPUParams &p)
     : BaseSimpleCPU(p), fetchTranslation(this), icachePort(this),
       dcachePort(this), ifetch_pkt(NULL), dcache_pkt(NULL), previousCycle(0),
+      pageFaultLatency(p.page_fault_latency),
       fetchEvent([this]{ fetch(); }, name())
 {
     _status = Idle;
@@ -789,8 +791,29 @@ TimingSimpleCPU::advanceInst(const Fault &fault)
         if (_status != Idle) {
             DPRINTF(SimpleCPU, "Scheduling fetch event after the Fault\n");
 
-            Tick stall = std::dynamic_pointer_cast<SyscallRetryFault>(fault) ?
-                         clockEdge(syscallRetryLatency) : clockEdge();
+            Tick stall = clockEdge();
+            if (std::dynamic_pointer_cast<SyscallRetryFault>(fault)) {
+                stall = clockEdge(syscallRetryLatency);
+            }
+            // Inject extra latency when the fault is a page fault
+            // (generic SE-mode or arch-specific page fault types).
+            if (pageFaultLatency > Cycles(0)) {
+                // Try generic SE-mode page fault first
+                if (std::dynamic_pointer_cast<GenericPageTableFault>(fault)) {
+                    stall = clockEdge(pageFaultLatency);
+                } else {
+                    // x86 specific PageFault
+                    // We cannot include arch headers here, but dynamic_pointer_cast
+                    // on an unknown type won't compile. So only rely on the name().
+                    // If the fault name contains "Page-Fault" or equals known strings,
+                    // apply the latency.
+                    const char* fname = fault->name();
+                    if (fname && (std::string(fname).find("Page-Fault") != std::string::npos ||
+                                  std::string(fname).find("page table fault") != std::string::npos)) {
+                        stall = clockEdge(pageFaultLatency);
+                    }
+                }
+            }
             reschedule(fetchEvent, stall, true);
             _status = Faulting;
         }
