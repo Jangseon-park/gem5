@@ -219,5 +219,8 @@ class BaseO3CPU(BaseCPU):
     )
 
     # Additional stall cycles injected when a page fault occurs
+    # Default: ~10 microseconds at 3 GHz ≈ 30,000 cycles
     page_fault_latency = Param.Cycles(
-        0, "Additional stall cycles to wait after a page fault")
+        30000,
+        "Additional stall cycles to wait after a page fault (~10us @ 3GHz)",
+    )
