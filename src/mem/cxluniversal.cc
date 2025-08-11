@@ -69,6 +69,9 @@ CXLUniversal::CXLUniversal(const Params &p) :
     start_tick(0),
     resp_stall(false),
     req_stall(false),
+    end_tick(0),
+    num_read_req(0),
+    num_write_req(0),
     send_resp_event([this] { process_send_resp(); }, name()),
     tick_event([this] { process_tick(); }, name())
 {
@@ -195,7 +198,7 @@ void CXLUniversal::access_and_respond(PacketPtr pkt)
         response_queue.push_back(pkt);
         if (!resp_stall && !send_resp_event.scheduled()) {
             schedule(send_resp_event, time);
-        }
+        } 
     } else {
         pendingDelete.reset(pkt);
     }
@@ -216,6 +219,8 @@ void CXLUniversal::read_complete(uint64_t address, uint64_t when)
     if (p->second.empty()) inflight_read_req_queue.erase(p);
     assert(inflight_read_req != 0);
     --inflight_read_req;
+    num_read_req++;
+    end_tick = curTick();
     access_and_respond(pkt);
 }
 
@@ -228,6 +233,8 @@ void CXLUniversal::write_complete(uint64_t address, uint64_t when)
     if (p->second.empty()) inflight_write_req_queue.erase(p);
     assert(inflight_write_req != 0);
     --inflight_write_req;
+    num_write_req++;
+    end_tick = curTick();
     if (!wrapper->is_pending(::CXLUniv::PathType::INPUT) &&
         !wrapper->is_pending(::CXLUniv::PathType::OUTPUT) &&
         inflight_read_req == 0 && inflight_write_req == 0) {

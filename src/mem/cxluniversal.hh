@@ -53,6 +53,9 @@ class CXLUniversal : public AbstractMemory
     Tick start_tick;
     bool resp_stall;
     bool req_stall;
+    Tick end_tick;
+    uint64_t num_read_req = 0;
+    uint64_t num_write_req = 0;
 
     uint64_t inflight_read_req = 0;
     uint64_t inflight_write_req = 0;
