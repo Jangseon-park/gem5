@@ -71,14 +71,22 @@ class CXLUniversalMemory(AbstractMemorySystem):
         """
         super().__init__()
 
-        self.cxl_universal = CXLUniversal(
-            configFile=config_file,
-            filePath=result_file,
-            range=AddrRange(range_start, range_start + toMemorySize(size) - 1),
-        )
-
+        self._config_file = config_file
+        self._result_file = result_file
         self._size = toMemorySize(size)
         self._range_start = range_start
+
+        # Initially create a single controller for the whole range
+        # This will be overwritten if set_memory_range is called with multiple ranges
+        self._cxl_universals = [
+            CXLUniversal(
+                configFile=config_file,
+                filePath=result_file,
+                range=AddrRange(
+                    range_start, range_start + toMemorySize(size) - 1
+                ),
+            )
+        ]
 
     @overrides(AbstractMemorySystem)
     def incorporate_memory(self, board: AbstractBoard) -> None:
@@ -89,12 +97,12 @@ class CXLUniversalMemory(AbstractMemorySystem):
     @overrides(AbstractMemorySystem)
     def get_mem_ports(self) -> Sequence[Tuple[AddrRange, Port]]:
         """Get the memory ports for this memory system."""
-        return [(self.cxl_universal.range, self.cxl_universal.port)]
+        return [(ctrl.range, ctrl.port) for ctrl in self._cxl_universals]
 
     @overrides(AbstractMemorySystem)
     def get_memory_controllers(self) -> List[MemCtrl]:
         """Get all memory controllers in this memory system."""
-        return [self.cxl_universal]
+        return self._cxl_universals
 
     @overrides(AbstractMemorySystem)
     def get_mem_interfaces(self) -> List[MemInterface]:
@@ -110,24 +118,41 @@ class CXLUniversalMemory(AbstractMemorySystem):
     @overrides(AbstractMemorySystem)
     def set_memory_range(self, ranges: List[AddrRange]) -> None:
         """Set the memory range for this memory system."""
-        if len(ranges) != 1:
-            raise Exception(
-                "CXL Universal memory controller requires exactly one "
-                "address range."
-            )
 
-        range_obj = ranges[0]
-        if range_obj.size() != self._size:
+        print(f"range num is len {len(ranges)}")
+
+        total_size = sum(r.size() for r in ranges)
+        if total_size != self._size:
             raise Exception(
-                f"CXL Universal memory controller requires a range "
-                f"which matches the memory's size.\n"
-                f"Range size: {range_obj.size()}\n"
+                f"CXL Universal memory controller requires ranges "
+                f"which match the memory's size.\n"
+                f"Total range size: {total_size}\n"
                 f"Memory size: {self._size}"
             )
+        print(f"setting memory range for {len(ranges)} controllers")
 
-        self.cxl_universal.range = range_obj
+        import os
+
+        self._cxl_universals = []
+        for i, r in enumerate(ranges):
+            # Use index suffix for file path if multiple ranges to avoid overwriting
+            if len(ranges) > 1:
+                file_path = f"{self._result_file}_{i}"
+                # The C++ wrapper appends /result.log to this path, so it must be a directory.
+                # We need to ensure this directory exists.
+                os.makedirs(file_path, exist_ok=True)
+            else:
+                file_path = self._result_file
+
+            ctrl = CXLUniversal(
+                configFile=self._config_file, filePath=file_path, range=r
+            )
+            self._cxl_universals.append(ctrl)
+
+            # Register as a child SimObject to ensure it's properly instantiated in C++
+            setattr(self, f"controller{i}", ctrl)
 
     @overrides(AbstractMemorySystem)
     def get_uninterleaved_range(self) -> List[AddrRange]:
         """Get the uninterleaved memory range."""
-        return [self.cxl_universal.range]
+        return [ctrl.range for ctrl in self._cxl_universals]

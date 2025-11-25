@@ -279,11 +279,35 @@ class X86Board(AbstractSystemBoard, KernelDiskWorkload, SEBinaryWorkload):
             # Mark the rest of physical memory as available
             X86E820Entry(
                 addr=0x100000,
-                size=f"{self.mem_ranges[0].size() - 0x100000:d}B",
+                size=f"{int(self.mem_ranges[0].size()) - 0x100000:d}B",
                 range_type=1,
             ),
         ]
 
+        print(f"mem ranges are {self.mem_ranges}")
+        # Check for second data range (split memory scenario)
+        if len(self.mem_ranges) == 3:
+            print(f"second data range")
+            entries.append(
+                X86E820Entry(
+                    addr=0x100000000,
+                    size=f"{int(self.mem_ranges[1].size()):d}B",
+                    range_type=1,
+                )
+            )
+            io_index = 2
+        else:
+            io_index = 1
+        print(f"io index is {io_index}")
+        # Add IO range (Reserved)
+        entries.append(
+            X86E820Entry(
+                addr=0xC0000000,
+                size=f"{int(self.mem_ranges[io_index].size()):d}B",
+                range_type=2,
+            )
+        )
+        print(f"entries are {entries}")
         # Reserve the last 16KiB of the 32-bit address space for m5ops
         entries.append(
             X86E820Entry(addr=0xFFFF0000, size="64KiB", range_type=2)
@@ -339,16 +363,21 @@ class X86Board(AbstractSystemBoard, KernelDiskWorkload, SEBinaryWorkload):
         memory = self.get_memory()
 
         if memory.get_size() > toMemorySize("3GiB"):
-            raise Exception(
-                "X86Board currently only supports memory sizes up "
-                "to 3GiB because of the I/O hole."
-            )
-        data_range = AddrRange(memory.get_size())
-        memory.set_memory_range([data_range])
+            print(f"memory size is {memory.get_size()}")
+            data_ranges = [
+                AddrRange(toMemorySize("3GiB")),
+                AddrRange(
+                    toMemorySize("4GiB"),
+                    size=memory.get_size() - toMemorySize("3GiB"),
+                ),
+            ]
+        else:
+            data_ranges = [AddrRange(memory.get_size())]
+        print(f"data ranges are {data_ranges}")
+        memory.set_memory_range(data_ranges)
 
         # Add the address range for the IO
-        self.mem_ranges = [
-            data_range,  # All data
+        self.mem_ranges = data_ranges + [
             AddrRange(0xC0000000, size=0x100000),  # For I/0
         ]
 

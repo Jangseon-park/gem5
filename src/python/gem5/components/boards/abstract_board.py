@@ -368,6 +368,10 @@ class AbstractBoard:
             hierarchy (via ``_connect_things``) as cache hierarchies depend upon
             knowing the memory system's ranges.
         """
+        print(
+            f"DEBUG: AbstractBoard._setup_memory_ranges called on instance of: {type(self)}"
+        )
+        print(f"DEBUG: MRO: {type(self).mro()}")
         raise NotImplementedError
 
     def _connect_things(self) -> None:

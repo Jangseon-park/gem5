@@ -155,7 +155,9 @@ bool CXLUniversal::recv_timing_req(PacketPtr pkt)
         DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req: Read\n");
         inflight_read_req++;
         inflight_read_req_queue[pkt->getAddr()].push(pkt);
-        wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 0); // Read
+        wrapper->recv_from_gem5(curTick(),
+                                pkt->getAddr() - getAddrRange().start(),
+                                0); // Read
         if (!tick_event.scheduled()) {
             schedule(tick_event, clockEdge());
         }
@@ -164,7 +166,9 @@ bool CXLUniversal::recv_timing_req(PacketPtr pkt)
         DPRINTF(CXLUniversal, "CXLUniversal::recv_timing_req: Write\n");
         inflight_write_req++;
         inflight_write_req_queue[pkt->getAddr()].push(pkt);
-        wrapper->recv_from_gem5(curTick(), pkt->getAddr(), 1); // Write
+        wrapper->recv_from_gem5(curTick(),
+                                pkt->getAddr() - getAddrRange().start(),
+                                1); // Write
         access_and_respond(pkt);
         if (!tick_event.scheduled()) {
             schedule(tick_event, clockEdge());
@@ -209,7 +213,8 @@ uint64_t CXLUniversal::get_size() const
 void CXLUniversal::read_complete(uint64_t address, uint64_t when)
 {
     DPRINTF(CXLUniversal, "CXLUniversal::read_complete\n");
-    auto p = inflight_read_req_queue.find(address);
+    uint64_t global_addr = address + getAddrRange().start();
+    auto p = inflight_read_req_queue.find(global_addr);
     assert(p != inflight_read_req_queue.end());
     PacketPtr pkt = p->second.front();
     p->second.pop();
@@ -222,7 +227,8 @@ void CXLUniversal::read_complete(uint64_t address, uint64_t when)
 void CXLUniversal::write_complete(uint64_t address, uint64_t when)
 {
     DPRINTF(CXLUniversal, "CXLUniversal::write_complete\n");
-    auto p = inflight_write_req_queue.find(address);
+    uint64_t global_addr = address + getAddrRange().start();
+    auto p = inflight_write_req_queue.find(global_addr);
     assert(p != inflight_write_req_queue.end());
     p->second.pop();
     if (p->second.empty()) inflight_write_req_queue.erase(p);

@@ -78,8 +78,8 @@ args = parser.parse_args()
 
 # Fill this in
 memory = CXLUniversalMemory(
-    config_file="/Users/parkjangseon/Library/CloudStorage/OneDrive-Personal/Research/MyOwnResearch/gem5/ext/cxl_u/cxl_u/input/config/config_test_ddr5_open_page_simple_for_gem5.yaml",
-    result_file="/Users/parkjangseon/Library/CloudStorage/OneDrive-Personal/Research/MyOwnResearch/gem5/ext/cxl_u/cxl_u/input/config",
+    config_file="/home/wolf/workspace/gem5_tuto/gem5/ext/cxl_u/cxl_u/input/config/config_test_ddr5_open_page_simple_for_gem5.yaml",
+    result_file="/home/wolf/workspace/gem5_tuto/gem5/ext/cxl_u/cxl_u/input/config",
     size="4GB",
 )
 
